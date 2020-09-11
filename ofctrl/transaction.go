@@ -149,6 +149,8 @@ func (tx *Transaction) Begin() error {
 
 	err := tx.sendControlRequest(message.Header.Xid, message)
 	if err != nil {
+		close(tx.controlReplyCh)
+		tx.ofSwitch.unSubscribeMessage(tx.ID)
 		return err
 	}
 	return nil
