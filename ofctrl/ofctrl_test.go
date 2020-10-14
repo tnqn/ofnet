@@ -317,7 +317,7 @@ func TestCreateDeleteFlow(t *testing.T) {
 		Priority:     100,
 		Ethertype:    0x0800,
 		IpProto:      6,
-		TcpDstPort:   80,
+		DstPort:      80,
 		TcpFlags:     &tcpFlag,
 		TcpFlagsMask: &tcpFlag,
 	})
@@ -646,13 +646,15 @@ func TestMatchIpv6Fields(t *testing.T) {
 // TestMatchSetTcpFields verifies match & set for tcp fields
 func TestMatchSetTcpFields(t *testing.T) {
 	tcpFlag := uint16(0x12)
+	srcPortMask := uint16(0xfff8)
 	inPortFlow, err := ofActor.inputTable.NewFlow(FlowMatch{
 		Priority:     100,
 		InputPort:    1,
 		Ethertype:    0x0800,
 		IpProto:      IP_PROTO_TCP,
-		TcpSrcPort:   8000,
-		TcpDstPort:   9000,
+		SrcPort:      0x8000,
+		SrcPortMask:  &srcPortMask,
+		DstPort:      9000,
 		TcpFlags:     &tcpFlag,
 		TcpFlagsMask: &tcpFlag,
 	})
@@ -671,7 +673,7 @@ func TestMatchSetTcpFields(t *testing.T) {
 	}
 
 	// verify metadata action exists
-	if !ofctlDumpFlowMatch("ovsbr11", 0, "priority=100,tcp,in_port=1,tp_src=8000,tp_dst=9000,tcp_flags=+syn+ack",
+	if !ofctlDumpFlowMatch("ovsbr11", 0, "priority=100,tcp,in_port=1,tp_src=0x8000/0xfff8,tp_dst=9000,tcp_flags=+syn+ack",
 		"set_field:5000->tcp_dst,set_field:4000->tcp_src,goto_table:1") {
 		t.Errorf("in port flow not found in OVS.")
 	}
@@ -683,7 +685,7 @@ func TestMatchSetTcpFields(t *testing.T) {
 	}
 
 	// Make sure they are really gone
-	if ofctlDumpFlowMatch("ovsbr11", 0, "priority=100,tcp,in_port=1,tp_src=8000,tp_dst=9000,tcp_flags=+syn+ack",
+	if ofctlDumpFlowMatch("ovsbr11", 0, "priority=100,tcp,in_port=1,tp_src=0x8000/0xfff8,tp_dst=9000,tcp_flags=+syn+ack",
 		"set_field:5000->tcp_dst,set_field:4000->tcp_src,goto_table:1") {
 		t.Errorf("in port flow still found in OVS after deleting it.")
 	}
@@ -692,12 +694,12 @@ func TestMatchSetTcpFields(t *testing.T) {
 // TestMatchSetUdpFields verifies match & set for udp fields
 func TestMatchSetUdpFields(t *testing.T) {
 	inPortFlow, err := ofActor.inputTable.NewFlow(FlowMatch{
-		Priority:   100,
-		InputPort:  1,
-		Ethertype:  0x0800,
-		IpProto:    IP_PROTO_UDP,
-		UdpSrcPort: 8000,
-		UdpDstPort: 9000,
+		Priority:  100,
+		InputPort: 1,
+		Ethertype: 0x0800,
+		IpProto:   IP_PROTO_UDP,
+		SrcPort:   8000,
+		DstPort:   9000,
 	})
 	if err != nil {
 		t.Errorf("Error creating inport flow. Err: %v", err)
@@ -743,8 +745,8 @@ func TestOFSwitch_DumpFlowStats(t *testing.T) {
 		InputPort:    1,
 		Ethertype:    0x0800,
 		IpProto:      IP_PROTO_TCP,
-		TcpSrcPort:   8000,
-		TcpDstPort:   9000,
+		SrcPort:      8000,
+		DstPort:      9000,
 		TcpFlags:     &tcpFlag,
 		TcpFlagsMask: &tcpFlag,
 	})
@@ -757,12 +759,12 @@ func TestOFSwitch_DumpFlowStats(t *testing.T) {
 	err = flow1.Next(ofActor.nextTable)
 
 	flow2, err := ofActor2.inputTable.NewFlow(FlowMatch{
-		Priority:   100,
-		InputPort:  1,
-		Ethertype:  0x0800,
-		IpProto:    IP_PROTO_UDP,
-		UdpSrcPort: 8000,
-		UdpDstPort: 9000,
+		Priority:  100,
+		InputPort: 1,
+		Ethertype: 0x0800,
+		IpProto:   IP_PROTO_UDP,
+		SrcPort:   8000,
+		DstPort:   9000,
 	})
 	if err != nil {
 		t.Errorf("Error creating inport flow. Err: %v", err)
@@ -1730,29 +1732,6 @@ func TestIPv6Flows(t *testing.T) {
 	verifyNewFlowInstallAndDelete(t, flow5, brName, app.inputTable.TableId,
 		"priority=100,icmp6,in_port=5,icmp_type=135,icmp_code=0",
 		"set_field:2001:1:1:1443::ab:1004->nd_target,set_field:136->icmpv6_type,goto_table:1")
-}
-
-func TestDumpFlow(t *testing.T) {
-	app := new(OfActor)
-	ctrl := NewController(app)
-	brName := "br1"
-	go ctrl.Connect(fmt.Sprintf("/var/run/openvswitch/%s.mgmt", brName))
-	time.Sleep(4 * time.Second)
-	setOfTables(t, app, brName)
-	app.Switch.EnableMonitor()
-
-	cookieID := uint64(0x12)
-	cookieMask := ^uint64(0x0)
-	tableID := uint8(3)
-	flowMath := &FlowMatch{
-		Priority:  100,
-		Ethertype: 0x86dd,
-	}
-	stats, err := app.Switch.DumpFlowStats(cookieID, cookieMask, flowMath, &tableID)
-	assert.Nil(t, err)
-	for _, stat := range stats {
-		fmt.Printf("%v", stat.Match.Fields)
-	}
 }
 
 func testNXExtensionNote(ofApp *OfActor, ovsBr *OvsDriver, t *testing.T) {
