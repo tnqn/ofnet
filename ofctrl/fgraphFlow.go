@@ -68,6 +68,8 @@ type FlowMatch struct {
 	NxRegs        []*NXRegister        // regX or regX[m..n]
 	CtMark        uint32               // conn_track mark
 	CtMarkMask    *uint32              // Mask of conn_track mark
+	PktMark       uint32               // Packet mark
+	PktMarkMask   *uint32              // Packet mark mask
 }
 
 // additional actions in flow's instruction set
@@ -377,6 +379,16 @@ func (self *Flow) xlateMatch() openflow13.Match {
 	if self.Match.CtMark != 0 {
 		ctMarkField := openflow13.NewCTMarkMatchField(self.Match.CtMark, self.Match.CtMarkMask)
 		ofMatch.AddField(*ctMarkField)
+	}
+
+	// Handle pkt_mark match
+	if self.Match.PktMark != 0 {
+		pktMarkField, _ := openflow13.FindFieldHeaderByName("NXM_NX_PKT_MARK", self.Match.PktMarkMask != nil)
+		pktMarkField.Value = &openflow13.Uint32Message{self.Match.PktMark}
+		if self.Match.PktMarkMask != nil {
+			pktMarkField.Mask = &openflow13.Uint32Message{*self.Match.PktMarkMask}
+		}
+		ofMatch.AddField(*pktMarkField)
 	}
 
 	return *ofMatch
